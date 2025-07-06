@@ -24,7 +24,6 @@ def obter_tarifa_dba_amazon(preco):
 def calcular_preco(plataforma, dados_base, metodo_calculo, promocao_percentual, **kwargs):
     resultado = {
         'preco_de_lista': 0, 'preco_efetivo': 0, 'erro': None,
-        # Inicializa todos os campos possíveis para evitar erros
         'taxa_fixa_aplicada': 0, 'custo_frete_gratis_aplicado': 0, 'valor_comissao_ml': 0,
         'valor_imposto': 0, 'valor_custo_unitario': 0, 'valor_lucro_liquido': 0,
         'valor_desconto': 0, 'margem_bruta': 0, 'taxa_transacao_aplicada': 0,
@@ -96,7 +95,6 @@ def calcular_preco(plataforma, dados_base, metodo_calculo, promocao_percentual, 
         else: # Markup
             denominador = 1 - (comissao_total_perc / 100)
             preco_provisorio = ((dados_base['preco_custo'] + TAXA_TRANSACAO_SHOPEE) * kwargs.get('markup_indice', 1)) / denominador
-
         comissao_base_calc = preco_provisorio * (COMISSAO_PADRAO_SHOPEE_PERC / 100)
         if comissao_base_calc <= TETO_COMISSAO_PADRAO_SHOPEE:
             preco_efetivo = preco_provisorio
@@ -116,8 +114,6 @@ def calcular_preco(plataforma, dados_base, metodo_calculo, promocao_percentual, 
                 preco_efetivo = ((dados_base['preco_custo'] + TAXA_TRANSACAO_SHOPEE + TETO_COMISSAO_PADRAO_SHOPEE) * kwargs.get('markup_indice', 1)) / denominador_recalc
             if dados_base['participa_frete_gratis']:
                 resultado['adicional_frete_aplicado'] = preco_efetivo * (ADICIONAL_FRETE_GRATIS_PERC / 100)
-        
-        # BLOCO DE CÁLCULO FALTANTE ADICIONADO AQUI
         if metodo_calculo == "Percentual sobre a Venda (Margem)":
             lucro_desejado = kwargs.get('lucro_desejado_percentual', 0)
             resultado['valor_imposto'] = preco_efetivo * (dados_base['imposto_percentual'] / 100)
@@ -140,22 +136,24 @@ def calcular_preco(plataforma, dados_base, metodo_calculo, promocao_percentual, 
             else:
                 preco_efetivo = (custos_base + tarifa_real) / denominador
                 resultado['tarifa_dba_unidade'] = tarifa_real
-            
-            # BLOCO DE CÁLCULO FALTANTE ADICIONADO AQUI
             resultado['valor_imposto'] = preco_efetivo * (dados_base['imposto_percentual'] / 100)
             resultado['valor_custo_unitario'] = preco_efetivo * (dados_base['custo_unitario_percentual'] / 100)
             resultado['valor_lucro_liquido'] = preco_efetivo * (lucro_desejado / 100)
         else: # Markup
+            markup = kwargs.get('markup_indice', 1)
             denominador_comissao = 1 - (dados_base['comissao_amazon_percentual'] / 100)
             custos_base = dados_base['preco_custo']
-            preco_provisorio = (custos_base * kwargs.get('markup_indice', 1)) / denominador_comissao
+            preco_provisorio = (custos_base * markup) / denominador_comissao
             tarifa_real = obter_tarifa_dba_amazon(preco_provisorio)
             if preco_provisorio >= 79:
-                preco_efetivo = ((custos_base + dados_base['custo_frete_dba']) * kwargs.get('markup_indice', 1)) / denominador_comissao
+                preco_efetivo = ((custos_base + dados_base['custo_frete_dba']) * markup) / denominador_comissao
                 resultado['custo_frete_dba_aplicado'] = dados_base['custo_frete_dba']
             else:
-                preco_efetivo = ((custos_base + tarifa_real) * kwargs.get('markup_indice', 1)) / denominador_comissao
+                preco_efetivo = ((custos_base + tarifa_real) * markup) / denominador_comissao
                 resultado['tarifa_dba_unidade'] = tarifa_real
+        
+        # CÁLCULO DA COMISSÃO AMAZON ADICIONADO AQUI
+        resultado['valor_comissao_amazon'] = preco_efetivo * (dados_base['comissao_amazon_percentual'] / 100)
 
     # --- FINALIZAÇÃO COMUM A TODOS ---
     preco_de_lista = preco_efetivo / denominador_desconto
@@ -163,8 +161,7 @@ def calcular_preco(plataforma, dados_base, metodo_calculo, promocao_percentual, 
         'preco_de_lista': preco_de_lista, 'preco_efetivo': preco_efetivo,
         'valor_desconto': preco_de_lista - preco_efetivo
     })
-
-    # Cálculo da margem bruta no final, após todos os custos serem definidos
+    
     custos_plataforma = (resultado.get('valor_comissao_ml',0) + resultado.get('taxa_fixa_aplicada',0) + resultado.get('custo_frete_gratis_aplicado',0) +
                          resultado.get('comissao_padrao_aplicada',0) + resultado.get('adicional_frete_aplicado',0) + resultado.get('taxa_transacao_aplicada',0) +
                          resultado.get('valor_comissao_amazon',0) + resultado.get('tarifa_dba_unidade',0) + resultado.get('custo_frete_dba_aplicado',0))
