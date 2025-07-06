@@ -30,8 +30,9 @@ with col1:
 
 with col2:
     st.header("2. Simule e Analise o Preço Final")
-    dados_base = {'preco_custo': preco_custo, 'taxa_ml_percentual': taxa_ml_percentual, 'custo_frete_gratis': custo_frete_gratis}
+    dados_base = {'preco_custo': preco_custo}
     kwargs = {}
+
     if metodo_calculo == "Percentual sobre a Venda (Margem)":
         st.markdown("Arraste para definir seu lucro líquido desejado:")
         lucro_desejado_percentual = st.slider("Lucro Líquido Desejado (%)", min_value=0.0, max_value=100.0, value=15.0, step=0.5, format="%.2f%%")
@@ -40,6 +41,7 @@ with col2:
     else:
         kwargs = {'markup_indice': markup_indice}
 
+    dados_base.update({'taxa_ml_percentual': taxa_ml_percentual, 'custo_frete_gratis': custo_frete_gratis})
     resultado_ml = calcular_preco("Mercado Livre", dados_base, metodo_calculo, promocao_percentual, **kwargs)
     
     st.divider()
@@ -47,6 +49,57 @@ with col2:
     if resultado_ml.get('erro'):
         st.error(f"**Erro:** {resultado_ml['erro']}")
     else:
-        # (O restante do código de exibição do resultado e das sugestões continua o mesmo)
         st.subheader("Resultado da Precificação no Mercado Livre")
-        # ... e assim por diante
+        st.metric(label="Preço de Vitrine (preço cheio)", value=f"R$ {resultado_ml['preco_de_lista']:.2f}")
+        if promocao_percentual > 0:
+            st.metric(label=f"Preço Final com Desconto ({promocao_percentual}%)", value=f"R$ {resultado_ml['preco_efetivo']:.2f}", delta=f"- R$ {resultado_ml['valor_desconto']:.2f}", delta_color="inverse")
+        
+        with st.expander("Ver Detalhamento dos Custos e Lucro"):
+            st.markdown("##### Custos e Taxas do Mercado Livre")
+            col_a, col_b = st.columns(2)
+            col_a.metric("Tarifa de Venda", f"R$ {resultado_ml.get('valor_comissao_ml', 0):.2f}")
+            if resultado_ml.get('taxa_fixa_aplicada', 0) > 0: col_b.metric("Custo Fixo (< R$ 79)", f"R$ {resultado_ml['taxa_fixa_aplicada']:.2f}")
+            if resultado_ml.get('custo_frete_gratis_aplicado', 0) > 0: col_b.metric("Custo Frete Grátis (>= R$ 79)", f"R$ {resultado_ml['custo_frete_gratis_aplicado']:.2f}")
+            
+            st.markdown("##### Outros Custos e Lucro")
+            col_c, col_d, col_e = st.columns(3)
+            col_c.metric("Impostos", f"R$ {resultado_ml.get('valor_imposto', 0):.2f}")
+            col_d.metric("Custo Unit. Venda", f"R$ {resultado_ml.get('valor_custo_unitario', 0):.2f}")
+            col_e.metric("Lucro Líquido (R$)", f"R$ {resultado_ml.get('valor_lucro_liquido', 0):.2f}")
+
+        st.divider()
+        st.subheader("💡 Sugestões para Outras Plataformas")
+        with st.expander("Calcular preço para Shopee e Amazon com os mesmos dados de custo e lucro"):
+            sug_col1, sug_col2 = st.columns(2)
+            with sug_col1:
+                st.markdown("##### Shopee")
+                shopee_frete_gratis = st.toggle("Participa do Frete Grátis da Shopee?", value=True, key="shopee_frete", help="Marque se participa do programa que adiciona 6% de comissão.")
+            with sug_col2:
+                st.markdown("##### Amazon (DBA)")
+                amazon_comissao = st.number_input("Comissão da Amazon (%)", value=15.0, step=0.5, format="%.2f", key="amazon_comissao", help="Comissão da Amazon para a categoria. [Consulte aqui](https://venda.amazon.com.br/precos).")
+                amazon_frete = st.number_input("Custo Frete DBA (>= R$79)", value=20.0, step=0.5, format="%.2f", key="amazon_frete", help="Tarifa DBA para produtos acima de R$79. [Consulte aqui](https://sellercentral.amazon.com.br/help/hub/reference/external/201382050).")
+            
+            if st.button("Calcular Sugestões de Preço"):
+                # Calcular para Shopee
+                dados_shopee = dados_base.copy()
+                dados_shopee['participa_frete_gratis'] = shopee_frete_gratis
+                resultado_shopee = calcular_preco("Shopee", dados_shopee, metodo_calculo, promocao_percentual, **kwargs)
+                # Calcular para Amazon
+                dados_amazon = dados_base.copy()
+                dados_amazon['comissao_amazon_percentual'] = amazon_comissao
+                dados_amazon['custo_frete_dba'] = amazon_frete
+                resultado_amazon = calcular_preco("Amazon", dados_amazon, metodo_calculo, promocao_percentual, **kwargs)
+
+                st.markdown("---")
+                res_col1, res_col2 = st.columns(2)
+                with res_col1:
+                    st.markdown("##### Preço Sugerido na Shopee")
+                    st.metric("Preço de Venda", f"R$ {resultado_shopee.get('preco_de_lista', 0):.2f}")
+                with res_col2:
+                    st.markdown("##### Preço Sugerido na Amazon")
+                    st.metric("Preço de Venda", f"R$ {resultado_amazon.get('preco_de_lista', 0):.2f}")
+
+st.divider()
+hoje = datetime.date.today()
+data_formatada = hoje.strftime("%d/%m/%Y")
+st.caption(f"Informações sobre taxas atualizadas em {data_formatada}.")
