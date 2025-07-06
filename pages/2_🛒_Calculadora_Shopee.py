@@ -1,14 +1,17 @@
 # pages/2_🛒_Calculadora_Shopee.py
 import streamlit as st
 import datetime
-from engine import calcular_preco
+from engine import calcular_preco, COMISSAO_PADRAO_SHOPEE_PERC, ADICIONAL_FRETE_GRATIS_PERC
 
+# --- CONFIGURAÇÕES DA PÁGINA ---
 st.set_page_config(page_title="Calculadora Shopee", page_icon="🛒", layout="wide")
 
+# --- BARRA LATERAL (SIDEBAR) ---
 st.sidebar.title("Precificação para Marketplaces")
 st.sidebar.markdown("---")
 st.sidebar.markdown("Powered by William Cardoso")
 
+# --- INTERFACE PRINCIPAL ---
 st.markdown("# Calculadora de Precificação - Shopee")
 st.divider()
 col1, col2 = st.columns([1, 1])
@@ -50,9 +53,42 @@ with col2:
         if promocao_percentual > 0:
             st.metric(label=f"Preço Final com Desconto ({promocao_percentual}%)", value=f"R$ {resultado_shopee['preco_efetivo']:.2f}", delta=f"- R$ {resultado_shopee['valor_desconto']:.2f}", delta_color="inverse")
         
-        # Detalhamento para Shopee...
-        # ... (código do expander de detalhamento da Shopee, igual ao que já tínhamos) ...
+        # --- BLOCO DE DETALHAMENTO QUE ESTAVA FALTANDO ---
+        if metodo_calculo == "Percentual sobre a Venda (Margem)":
+            with st.expander("Ver Detalhamento dos Custos e Lucro"):
+                st.markdown("##### Custos e Taxas da Shopee")
+                total_comissao = resultado_shopee.get('comissao_padrao_aplicada', 0) + resultado_shopee.get('adicional_frete_aplicado', 0)
+                comissao_perc_exibida = COMISSAO_PADRAO_SHOPEE_PERC + (ADICIONAL_FRETE_GRATIS_PERC if dados_base['participa_frete_gratis'] else 0)
+                
+                col_a, col_b = st.columns(2)
+                col_a.metric(f"Comissão Total ({comissao_perc_exibida:.0f}%)", f"R$ {total_comissao:.2f}", help=f"Comissão Padrão ({COMISSAO_PADRAO_SHOPEE_PERC}%): R${resultado_shopee.get('comissao_padrao_aplicada', 0):.2f} + Adicional Frete: R${resultado_shopee.get('adicional_frete_aplicado', 0):.2f}")
+                col_b.metric("Taxa de Transação", f"R$ {resultado_shopee.get('taxa_transacao_aplicada', 0):.2f}")
+                
+                st.markdown("##### Outros Custos e Lucro")
+                col_c, col_d, col_e = st.columns(3)
+                col_c.metric("Impostos", f"R$ {resultado_shopee.get('valor_imposto', 0):.2f}")
+                col_d.metric("Custo Unit. Venda", f"R$ {resultado_shopee.get('valor_custo_unitario', 0):.2f}")
+                col_e.metric("Lucro Líquido (R$)", f"R$ {resultado_shopee.get('valor_lucro_liquido', 0):.2f}")
+        else: # Markup
+            with st.expander("Ver Detalhamento da Composição do Preço"):
+                st.metric("Custo do Produto", f"R$ {dados_base['preco_custo']:.2f}")
+                st.markdown("---")
+                st.markdown("##### Taxas da Shopee")
+                total_comissao = resultado_shopee.get('comissao_padrao_aplicada', 0) + resultado_shopee.get('adicional_frete_aplicado', 0)
+                comissao_perc_exibida = COMISSAO_PADRAO_SHOPEE_PERC + (ADICIONAL_FRETE_GRATIS_PERC if dados_base['participa_frete_gratis'] else 0)
+                
+                col_a, col_b = st.columns(2)
+                col_a.metric(f"Comissão Total ({comissao_perc_exibida:.0f}%)", f"R$ {total_comissao:.2f}", help=f"Comissão Padrão ({COMISSAO_PADRAO_SHOPEE_PERC}%): R${resultado_shopee.get('comissao_padrao_aplicada', 0):.2f} + Adicional Frete: R${resultado_shopee.get('adicional_frete_aplicado', 0):.2f}")
+                col_b.metric("Taxa de Transação", f"R$ {resultado_shopee.get('taxa_transacao_aplicada', 0):.2f}")
 
+                st.markdown("---")
+                st.markdown("##### Resultado da Operação")
+                margem_bruta_percentual = (resultado_shopee.get('margem_bruta', 0) / resultado_shopee['preco_efetivo']) * 100 if resultado_shopee['preco_efetivo'] > 0 else 0
+                col_c, col_d = st.columns(2)
+                col_c.metric("Margem Bruta (R$)", f"R$ {resultado_shopee.get('margem_bruta', 0):.2f}", help="Valor que sobra para cobrir seus impostos e gerar lucro.")
+                col_d.metric("Margem Bruta (%)", f"{margem_bruta_percentual:.2f}%", help="Percentual do preço de venda que corresponde à sua margem bruta.")
+
+        # --- SEÇÃO DE SUGESTÕES PARA OUTRAS PLATAFORMAS ---
         st.divider()
         st.subheader("💡 Sugestões para Outras Plataformas")
         with st.expander("Calcular preço para Mercado Livre e Amazon com os mesmos dados de custo e lucro"):
@@ -67,15 +103,16 @@ with col2:
                 amazon_frete = st.number_input("Custo Frete DBA (>= R$79)", value=20.0, step=0.1, format="%.2f", key="amazon_frete_sug_sh")
 
             if st.button("Calcular Sugestões de Preço", key="btn_shopee_sug_sh"):
+                sug_dados_base = dados_base.copy()
+                sug_kwargs = kwargs.copy()
+
                 # Calcular para Meli
-                dados_ml_sug = dados_base.copy()
-                dados_ml_sug.update({'taxa_ml_percentual': ml_taxa, 'custo_frete_gratis': ml_frete})
-                resultado_ml = calcular_preco("Mercado Livre", dados_ml_sug, metodo_calculo, promocao_percentual, **kwargs)
+                sug_dados_base.update({'taxa_ml_percentual': ml_taxa, 'custo_frete_gratis': ml_frete})
+                resultado_ml = calcular_preco("Mercado Livre", sug_dados_base, metodo_calculo, promocao_percentual, **sug_kwargs)
                 
                 # Calcular para Amazon
-                dados_amazon_sug = dados_base.copy()
-                dados_amazon_sug.update({'comissao_amazon_percentual': amazon_comissao, 'custo_frete_dba': amazon_frete})
-                resultado_amazon = calcular_preco("Amazon", dados_amazon_sug, metodo_calculo, promocao_percentual, **kwargs)
+                sug_dados_base.update({'comissao_amazon_percentual': amazon_comissao, 'custo_frete_dba': amazon_frete})
+                resultado_amazon = calcular_preco("Amazon", sug_dados_base, metodo_calculo, promocao_percentual, **sug_kwargs)
 
                 st.markdown("---")
                 res_col1, res_col2 = st.columns(2)
