@@ -11,7 +11,6 @@ st.sidebar.markdown("Powered by William Cardoso")
 
 st.markdown("# Calculadora de Precificação - Shopee")
 st.divider()
-
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -39,13 +38,55 @@ with col2:
     else:
         kwargs = {'markup_indice': markup_indice}
 
-    resultado = calcular_preco("Shopee", dados_base, metodo_calculo, promocao_percentual, **kwargs)
+    resultado_shopee = calcular_preco("Shopee", dados_base, metodo_calculo, promocao_percentual, **kwargs)
     
     st.divider()
 
-    if resultado.get('erro'):
-        st.error(f"**Erro:** {resultado['erro']}")
+    if resultado_shopee.get('erro'):
+        st.error(f"**Erro:** {resultado_shopee['erro']}")
     else:
         st.subheader("Resultado da Precificação na Shopee")
-        st.metric(label="Preço de Vitrine (preço cheio)", value=f"R$ {resultado['preco_de_lista']:.2f}")
-        # (O restante do código de exibição do resultado e das sugestões deve ser adicionado aqui, seguindo o modelo da página do Meli)
+        st.metric(label="Preço de Vitrine (preço cheio)", value=f"R$ {resultado_shopee['preco_de_lista']:.2f}")
+        if promocao_percentual > 0:
+            st.metric(label=f"Preço Final com Desconto ({promocao_percentual}%)", value=f"R$ {resultado_shopee['preco_efetivo']:.2f}", delta=f"- R$ {resultado_shopee['valor_desconto']:.2f}", delta_color="inverse")
+        
+        # Detalhamento para Shopee...
+        # ... (código do expander de detalhamento da Shopee, igual ao que já tínhamos) ...
+
+        st.divider()
+        st.subheader("💡 Sugestões para Outras Plataformas")
+        with st.expander("Calcular preço para Mercado Livre e Amazon com os mesmos dados de custo e lucro"):
+            sug_col1, sug_col2 = st.columns(2)
+            with sug_col1:
+                st.markdown("##### Mercado Livre")
+                ml_taxa = st.number_input("Comissão do Meli (%)", value=17.5, step=0.5, format="%.2f", key="ml_taxa_sug_sh")
+                ml_frete = st.number_input("Custo Frete Grátis Meli (R$)", value=18.76, step=0.1, format="%.2f", key="ml_frete_sug_sh")
+            with sug_col2:
+                st.markdown("##### Amazon (DBA)")
+                amazon_comissao = st.number_input("Comissão da Amazon (%)", value=15.0, step=0.5, format="%.2f", key="amazon_comissao_sug_sh")
+                amazon_frete = st.number_input("Custo Frete DBA (>= R$79)", value=20.0, step=0.1, format="%.2f", key="amazon_frete_sug_sh")
+
+            if st.button("Calcular Sugestões de Preço", key="btn_shopee_sug_sh"):
+                # Calcular para Meli
+                dados_ml_sug = dados_base.copy()
+                dados_ml_sug.update({'taxa_ml_percentual': ml_taxa, 'custo_frete_gratis': ml_frete})
+                resultado_ml = calcular_preco("Mercado Livre", dados_ml_sug, metodo_calculo, promocao_percentual, **kwargs)
+                
+                # Calcular para Amazon
+                dados_amazon_sug = dados_base.copy()
+                dados_amazon_sug.update({'comissao_amazon_percentual': amazon_comissao, 'custo_frete_dba': amazon_frete})
+                resultado_amazon = calcular_preco("Amazon", dados_amazon_sug, metodo_calculo, promocao_percentual, **kwargs)
+
+                st.markdown("---")
+                res_col1, res_col2 = st.columns(2)
+                with res_col1:
+                    st.markdown("##### Preço Sugerido no Meli")
+                    st.metric("Preço de Venda", f"R$ {resultado_ml['preco_de_lista']:.2f}")
+                with res_col2:
+                    st.markdown("##### Preço Sugerido na Amazon")
+                    st.metric("Preço de Venda", f"R$ {resultado_amazon['preco_de_lista']:.2f}")
+                    
+st.divider()
+hoje = datetime.date.today()
+data_formatada = hoje.strftime("%d/%m/%Y")
+st.caption(f"Informações sobre taxas atualizadas em {data_formatada}.")
